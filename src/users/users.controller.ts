@@ -6,21 +6,25 @@ import {
   Patch,
   Param,
   Delete,
-  UseGuards,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { User } from '@prisma/client';
+import { ROLE, User } from '@prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 
-import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
+import { JwtAuth, Role } from 'src/decorators/auth.decorator';
 
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { GetCurrentUser } from 'src/decorators/get-current-user.decorator';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @UseGuards(JwtAuthGuard)
+  @Role(ROLE.ADMIN)
   @Post()
   async create(@Body() createUserDto: CreateUserDto): Promise<User> {
     return await this.usersService.create(createUserDto);
@@ -36,7 +40,7 @@ export class UsersController {
     return await this.usersService.findById(id);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @JwtAuth()
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -45,9 +49,29 @@ export class UsersController {
     return this.usersService.update(id, updateUserDto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @JwtAuth()
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<void> {
     await this.usersService.remove(id);
+  }
+
+  @Role(ROLE.ADMIN)
+  @Post('import')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './upload/excel',
+        filename(req, file, cb) {
+          const ext: string = file.originalname.split('.').slice(-1)[0];
+          cb(null, `excel-${Date.now()}.${ext}`);
+        },
+      }),
+    }),
+  )
+  async importExcelFile(
+    @UploadedFile() file: Express.Multer.File,
+    @GetCurrentUser() user: User,
+  ): Promise<void | object> {
+    return await this.usersService.importExcelFile(file, user?.id);
   }
 }
