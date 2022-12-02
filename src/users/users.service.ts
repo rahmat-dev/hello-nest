@@ -1,16 +1,21 @@
+import { InjectQueue } from '@nestjs/bull';
 import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { User } from '@prisma/client';
+import { ExcelFile, User } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import * as bcrypt from 'bcrypt';
+import { Queue } from 'bull';
+import { readFile, utils } from 'xlsx';
 
 import { IMPORT_EXCEL } from 'src/constants/event.constant';
+import { IMPORT_EXCEL_QUEUE } from 'src/constants/queue.constant';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 import { CreateUserDto } from './dto/create-user.dto';
@@ -26,9 +31,12 @@ function exclude<User, Key extends keyof User>(user: User, keys: Key[]): User {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    @InjectQueue(IMPORT_EXCEL_QUEUE) private readonly queue: Queue,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -117,13 +125,54 @@ export class UsersService {
         },
       });
 
+      //   await this.queue.add(newFile);
+
       const importExcelEvent: ImportExcelEvent = new ImportExcelEvent();
-      importExcelEvent.filepath = path;
+      importExcelEvent.file = newFile;
       this.eventEmitter.emit(IMPORT_EXCEL.UPLOADED, importExcelEvent);
 
       return newFile;
     } catch (e) {
       throw new InternalServerErrorException(e);
+    }
+  }
+
+  async bulkInsertUsers(file: ExcelFile): Promise<void> {
+    try {
+      const { id, path } = file;
+      const reader = readFile(path);
+      const firstSheet = reader.Sheets[reader.SheetNames[0]];
+      const jsonUsers = utils.sheet_to_json(firstSheet);
+      const chunkSize = 100;
+
+      for (let i = 0; i < jsonUsers.length; i += chunkSize) {
+        const chunkUsers = [...jsonUsers].slice(i, i + chunkSize);
+        const createManyUsers = await Promise.all(
+          chunkUsers.map(async ({ name, email, password }) => {
+            const salt = await bcrypt.genSalt();
+            const hashedPassword = await bcrypt.hash(String(password), salt);
+
+            return {
+              name,
+              email: `${email}com`,
+              password: hashedPassword,
+              salt,
+            };
+          }),
+        );
+
+        await this.prisma.user.createMany({
+          data: createManyUsers,
+          skipDuplicates: true,
+        });
+
+        let insertPercentages = ((i + chunkSize) / jsonUsers.length) * 100;
+        insertPercentages =
+          insertPercentages > 100 ? 100 : Math.floor(insertPercentages);
+        this.logger.debug(`File #${id}: ${insertPercentages}%`);
+      }
+    } catch (e) {
+      this.logger.error(e.message);
     }
   }
 }

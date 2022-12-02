@@ -1,3 +1,5 @@
+import { ExcelFile } from '@prisma/client';
+
 export class ImportExcelEvent {
-  filepath: string;
+  file: ExcelFile;
 }
