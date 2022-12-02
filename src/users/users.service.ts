@@ -5,14 +5,17 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { User } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import * as bcrypt from 'bcrypt';
 
+import { IMPORT_EXCEL } from 'src/constants/event.constant';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ImportExcelEvent } from './events/import-excel.event';
 
 function exclude<User, Key extends keyof User>(user: User, keys: Key[]): User {
   for (const key of keys) {
@@ -23,7 +26,10 @@ function exclude<User, Key extends keyof User>(user: User, keys: Key[]): User {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     try {
@@ -110,31 +116,12 @@ export class UsersService {
           uploader_id: uploaderId,
         },
       });
+
+      const importExcelEvent: ImportExcelEvent = new ImportExcelEvent();
+      importExcelEvent.filepath = path;
+      this.eventEmitter.emit(IMPORT_EXCEL.UPLOADED, importExcelEvent);
+
       return newFile;
-
-      //   const reader = readFile(file.path);
-      //   const firstSheet = reader.Sheets[reader.SheetNames[0]];
-      //   const json = utils.sheet_to_json(firstSheet);
-      //   const createManyUsers = await Promise.all(
-      //     json.map(async ({ name, email, password }) => {
-      //       const salt = await bcrypt.genSalt();
-      //       const hashedPassword = await bcrypt.hash(String(password), salt);
-
-      //       return {
-      //         name,
-      //         email,
-      //         password: hashedPassword,
-      //         salt,
-      //       };
-      //     }),
-      //   );
-
-      //   await this.prisma.user.createMany({
-      //     data: createManyUsers,
-      //     skipDuplicates: true,
-      //   });
-
-      //   return file;
     } catch (e) {
       throw new InternalServerErrorException(e);
     }
