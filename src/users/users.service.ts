@@ -21,6 +21,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ImportExcelEvent } from './events/import-excel.event';
+import { UsersGateway } from './users.gateway';
 
 function exclude<User, Key extends keyof User>(user: User, keys: Key[]): User {
   for (const key of keys) {
@@ -37,6 +38,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue(IMPORT_EXCEL_QUEUE) private readonly queue: Queue,
+    private readonly gateway: UsersGateway,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -97,10 +99,8 @@ export class UsersService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    const isPasswordMatch =
-      user.password === (await bcrypt.hash(password, user.salt));
 
-    if (user && isPasswordMatch) {
+    if (user && user?.password === (await bcrypt.hash(password, user?.salt))) {
       return user;
     }
 
@@ -166,10 +166,10 @@ export class UsersService {
           skipDuplicates: true,
         });
 
-        let insertPercentages = ((i + chunkSize) / jsonUsers.length) * 100;
-        insertPercentages =
-          insertPercentages > 100 ? 100 : Math.floor(insertPercentages);
-        this.logger.debug(`File #${id}: ${insertPercentages}%`);
+        let percentages = ((i + chunkSize) / jsonUsers.length) * 100;
+        percentages = percentages > 100 ? 100 : Math.floor(percentages);
+        this.gateway.server.emit('import-users-progress', { percentages });
+        this.logger.debug(`File #${id}: ${percentages}%`);
       }
     } catch (e) {
       this.logger.error(e.message);

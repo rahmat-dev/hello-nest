@@ -5,7 +5,11 @@ import { AppModule } from './app.module';
 // import { PrismaService } from './common/services/prisma.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    cors: {
+      origin: '*',
+    },
+  });
 
   //   const prismaService = app.get(PrismaService);
   //   await prismaService.enableShutdownHooks(app);

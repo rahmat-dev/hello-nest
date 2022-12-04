@@ -8,6 +8,7 @@ import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { ImportExcelListener } from './listeners/import-excel.listener';
 import { ImportExcelProcessor } from './processors/import-excel.processor';
+import { UsersGateway } from './users.gateway';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ImportExcelProcessor } from './processors/import-excel.processor';
     PrismaService,
     ImportExcelListener,
     ImportExcelProcessor,
+    UsersGateway,
   ],
   exports: [UsersService],
 })
