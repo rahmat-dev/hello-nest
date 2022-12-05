@@ -23,7 +23,10 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ImportExcelEvent } from './events/import-excel.event';
 import { UsersGateway } from './users.gateway';
 
-function exclude<User, Key extends keyof User>(user: User, keys: Key[]): User {
+export function exclude<User, Key extends keyof User>(
+  user: User,
+  keys: Key[],
+): User {
   for (const key of keys) {
     delete user[key];
   }
@@ -98,7 +101,12 @@ export class UsersService {
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        device_tokens: true,
+      },
+    });
 
     if (user && user?.password === (await bcrypt.hash(password, user?.salt))) {
       return user;

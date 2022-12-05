@@ -17,16 +17,17 @@ enum ROLE {
 }
 
 model User {
-    id          String      @id @default(uuid())
-    name        String
-    email       String      @unique
-    password    String
-    salt        String
-    role        ROLE        @default(STUDENT)
-    createdAt   DateTime    @default(now())
-    updatedAt   DateTime    @updatedAt
-    posts       Post[]
-    excel_files ExcelFile[]
+    id            String        @id @default(uuid())
+    name          String
+    email         String        @unique
+    password      String
+    salt          String
+    role          ROLE          @default(STUDENT)
+    createdAt     DateTime      @default(now())
+    updatedAt     DateTime      @updatedAt
+    posts         Post[]
+    excel_files   ExcelFile[]
+    device_tokens DeviceToken[]
 }
 
 model Post {
@@ -50,4 +51,10 @@ model ExcelFile {
     updated_at        DateTime @updatedAt
     uploader_id       String
     uploader          User     @relation(fields: [uploader_id], references: [id])
+}
+
+model DeviceToken {
+    id      String @id
+    user_id String
+    user    User   @relation(fields: [user_id], references: [id])
 }
